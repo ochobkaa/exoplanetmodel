@@ -199,8 +199,10 @@ class OrbitalPeriod(Measure):
         super().__init__(val, err_min, err_max)
 
     @staticmethod
-    def __to_s(self, x):
+    def __to_s(x):
         x_s = x * 24 * 60 * 60
+
+        return x_s
 
     @property
     def val_s(self):
