@@ -1,7 +1,6 @@
-from abc import ABCMeta
+from abc import ABC
 
-@ABCMeta
-class Measure:
+class Measure(ABC):
     def __init__(self, val: float, err_min: float, err_max: float) -> None:
         self.__val = val
         self.__err_min = err_min
