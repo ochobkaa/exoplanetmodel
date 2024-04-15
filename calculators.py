@@ -1,13 +1,12 @@
 from numpy import power, sqrt, pi
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from typing import Callable, Iterable
 from measures import Measure, AU_M
 
 G = 6.6743e-11
 G_RERR = 5e-5
 
-@ABCMeta
-class Calculator:
+class Calculator(ABC):
     def __init__(self, ms_type: type) -> None:
         self.__ms_type = ms_type
 
