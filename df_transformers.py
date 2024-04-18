@@ -121,6 +121,60 @@ class DFPlanetTeffMeanCalc(DFCalculation):
         )
 
 
+class DFStarTeffBySpClassCalc(DFCalculation):
+    def __init__(self, con: MeasureConverter, cal: calc.StarTeffBySpCalc) -> None:
+        self.__con = con
+        self.__teff_calc = cal
+
+    def calc(self, df: pd.DataFrame) -> pd.DataFrame:
+        def read_sp_types(df: pd.DataFrame) -> Iterable[str]:
+            sp_types = df.get("star_sp_type").map(str).to_list()
+
+            return sp_types
+        
+        def read_star_teff(con: MeasureConverter, df: pd.DataFrame) -> Iterable[ms.StarTeff]:
+            star_teff_ms = list(con.read("star_teff", ms.StarTeff, df))
+
+            return star_teff_ms
+        
+        def calc_steff(cal: calc.StarTeffBySpCalc, sp_types: Iterable[str], star_teff: Iterable[ms.StarTeff]) -> Iterable[ms.StarTeff]:
+            for sp_type, steff_ms in zip(sp_types, star_teff):
+                if steff_ms and pd.notna(steff_ms.val):
+                    yield steff_ms
+
+                elif not sp_type:
+                    yield None
+                
+                else:
+                    t_value = cal.calc(sp_type)
+                    if t_value:
+                        new_ms = ms.StarTeff(t_value.teff, t_value.err, t_value.err)
+
+                        yield new_ms
+
+                    else:
+                        yield None
+
+        def write_measures(con: MeasureConverter, 
+                           col: str, 
+                           vals: Iterable[ms.Measure], 
+                           df: pd.DataFrame) -> pd.DataFrame:
+            vals_list = list(vals)
+            new_df = con.write(col, vals_list, df)
+
+            return new_df
+        
+        con = self.__con
+        cal = self.__teff_calc
+
+        sp_types = read_sp_types(df)
+        steff_ms = read_star_teff(con, df)
+        steff_ms_calc = calc_steff(cal, sp_types, steff_ms)
+        new_df = write_measures(con, "star_teff", steff_ms_calc, df)
+
+        return new_df
+
+
 class DFErrorGen:
     def __init__(self,
                  con: MeasureConverter,  err_gen: err.ErrorGenerator,
