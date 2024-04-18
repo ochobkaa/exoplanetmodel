@@ -42,6 +42,11 @@ class Measure(ABC):
 
         return rerr
     
+    def __str__(self) -> str:
+        s = "{val} +/- {err}".format(val=self.val, err=self.err)
+
+        return s
+    
 
 SOL_MASS_KG = 1.989e+30
 
