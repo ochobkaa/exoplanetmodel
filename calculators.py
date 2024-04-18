@@ -1,6 +1,9 @@
 from numpy import power, sqrt, pi
 from abc import ABC, abstractmethod
+from typing import Tuple
+from collections import namedtuple
 import measures as ms
+import re
 
 G = 6.6743e-11
 G_RERR = 5e-5
@@ -146,3 +149,132 @@ class PlanetTeffCalc(Calculator):
                                    alb_rerr_max, ecc, ecc_err_max, ttype)
         
         return teff_err_max
+
+
+class StarTeffCalc(Calculator):
+    __ParsedSpClass = namedtuple("ParsedSpClass", ["letter", "number"], defaults=["", 0.0])
+    __TableValue = namedtuple("ParsedSpClass", ["teff", "err"], defaults=[0.0, 0.0])
+
+    def __init__(self, ms_type: type) -> None:
+        super().__init__(ms_type)
+
+    @property
+    def SpClassTable(self):
+        table = {
+            "B": (10000.0, 30000.0),
+            "A": (7400.0, 10000.0),
+            "F": (6000.0, 7400.0),
+            "G": (5000.0, 6000.0),
+            "K": (3800.0, 5000.0),
+            "M": (2500.0, 3800.0)
+        }
+        return table
+    
+    def __parse_sp_class(self, sp_class: str) -> __ParsedSpClass:
+        sp_pattern1 = re.compile(r"^[BAFGKM]\d(\.\d)?")
+        sp_match1 = re.match(sp_pattern1, sp_class)
+        if sp_match1:
+            sp_cleared = sp_match1.group(0)
+            
+            letter = sp_cleared[0]
+            number = float(sp_cleared[1:])
+            parsed_sp = self.__ParsedSpClass(letter, number)
+            
+            return parsed_sp
+        
+        sp_pattern2 = re.compile(r"^[BAFGKM]")
+        sp_match2 = re.match(sp_pattern2, sp_class)
+        if sp_match2:
+            sp_cleared = sp_match2.group(0)
+            
+            letter = sp_cleared[0]
+            number = -1
+            parsed_sp = self.__ParsedSpClass(letter, number)
+            
+            return parsed_sp
+
+
+    def __vals_from_table(self, p_sp_class: __ParsedSpClass) -> __TableValue:
+        def interval_by_letter(letter: str) -> Tuple[float, float]:
+            interval = self.SpClassTable[letter]
+
+            return interval
+        
+        def get_delta_for_digit(interval: Tuple[float, float]) -> float:
+            delta = (interval[1] - interval[0]) / 10
+
+            return delta
+        
+        def get_delta_for_nondigit(interval: Tuple[float, float]) -> float:
+            delta = interval[1] - interval[0]
+
+            return delta
+        
+        def get_err(delta: float):
+            err = delta / 2
+
+            return err
+        
+        def get_val_for_digit(interval: Tuple[float, float], 
+                              delta: float, digit: float, err: float) -> float:
+            start = interval[0]
+            val = start + delta * digit + err
+
+            return val
+        
+        def get_val_for_nondigit(interval: Tuple[float, float], err: float) -> float:
+            start = interval[0]
+            val = start + err
+
+            return val
+        
+        letter = p_sp_class.letter
+        number = p_sp_class.number
+        
+        interval = interval_by_letter(letter)
+
+        if number == -1:
+            delta = get_delta_for_nondigit(interval)
+            err = get_err(delta)
+            val = get_val_for_nondigit(interval, err)
+            table_val = self.__TableValue(val, err)
+
+            return table_val
+        
+        elif number >= 0 and number < 10:
+            delta = get_delta_for_digit(interval)
+            err = get_err(delta)
+            val = get_val_for_digit(interval, delta, number, err)
+            table_val = self.__TableValue(val, err)
+
+            return table_val
+        
+    def fval(self, *args, **kwargs) -> float:
+        sp_type = kwargs["star_sp_type"]
+
+        p_sp_class = self.__parse_sp_class(sp_type)
+        table_val = self.__vals_from_table(p_sp_class)
+        teff = table_val.teff
+
+        return teff
+    
+    def __ferr(self, sp_type: str) -> float:
+        p_sp_class = self.__parse_sp_class(sp_type)
+        table_val = self.__vals_from_table(p_sp_class)
+        err = table_val.err
+
+        return err
+    
+    def ferr_min(self, val: float, *args, **kwargs):
+        sp_type = kwargs["star_sp_type"]
+
+        err_min = self.__ferr(sp_type)
+
+        return err_min
+    
+    def ferr_max(self, val: float, *args, **kwargs):
+        sp_type = kwargs["star_sp_type"]
+
+        err_max = self.__ferr(sp_type)
+
+        return err_max
