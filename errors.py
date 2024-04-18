@@ -1,6 +1,14 @@
 import numpy as np
+from abc import ABC, abstractmethod
 
-class ErrorGenerator:
+
+class ErrorGenerator(ABC):
+    @abstractmethod
+    def gen(self, val: float):
+        pass
+
+
+class ErrorGeneratorByOrder(ErrorGenerator):
     def __init__(self) -> None:
         pass
 
@@ -9,11 +17,13 @@ class ErrorGenerator:
 
         try:
             dot_pos = val_str.rindex('.')
+            has_point = True
 
         except ValueError:
             dot_pos = 0
+            has_point = False
 
-        if dot_pos > 0:
+        if dot_pos > 0 and dot_pos != len(val_str) - 1 and val_str[len(val_str) - 1] != '0':
             order = dot_pos - len(val_str) + 1
             return order
         
@@ -27,8 +37,12 @@ class ErrorGenerator:
             return 0
         
         for i in reversed(range(len(val_str))):
-            if val_str != 0:
-                order = len(val_str) - i
+            if val_str[i] != '0' and val_str[i] != '.':
+                order = len(val_str) - i - 1
+
+                if has_point:
+                    order -= 2
+
                 return order
                 
     def gen(self, val: float) -> float:
@@ -38,41 +52,71 @@ class ErrorGenerator:
         return err
     
 
+class ErrorGeneratorStarTeff(ErrorGenerator):
+    def gen(self, val: float) -> float:
+        return 100
+    
+
 class Round:
     def __init__(self) -> None:
         pass
 
     def __order(self, val: float) -> int:
-        order = int(np.log10(val))
-        return order
+        abs_val = abs(val)
+        if abs_val > 0:
+            order = int(np.log10(abs_val))
+            return order
     
-    def __norm(self, val: float) -> float:
-        norm = val / self.__order(val)
-        return norm
+    def __norm(self, val: float, order: float = None) -> float:
+        if not order:
+            order = self.__order(val)
+
+        if not order:
+            return
+
+        if val < 1:
+            norm = val * 10 ** (1 - order)
+            return norm
+        
+        else:
+            norm = val * 10 ** (-order)
+            return norm
     
     def __round(self, val: float, order: int) -> float:
-        order = self.__order(val)
-        norm = val / order
+        val_order = self.__order(val)
+        if not val_order:
+            return
 
-        norm_r = np.round(norm, order)
-        val_r = norm_r * order
+        norm = self.__norm(val, val_order)
+        norm_r = round(norm, abs(order))
+
+        if val < 1:
+            val_r = norm_r * 10 ** (val_order - 1)
+
+        else:
+            val_r = norm_r * 10 ** val_order
 
         return val_r
     
     def round_err(self, err: float) -> float:
         err_norm = self.__norm(err)
+        if not err_norm:
+            return err
+
         err_max_d = int(err_norm)
 
         if err_max_d > 2:
-            err_r = self.__round(err, 1)
+            err_r = self.__round(err, 0)
 
         else:
-            err_r = self.__round(err, 2)
+            err_r = self.__round(err, 1)
 
         return err_r
     
     def round_val(self, val: float, err: float) -> float:
         err_ord = self.__order(err)
+        if not err_ord:
+            return val
 
-        val_r = np.round(val, err_ord)
+        val_r = self.__round(val, err_ord + 1)
         return val_r
