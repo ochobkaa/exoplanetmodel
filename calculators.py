@@ -151,12 +151,9 @@ class PlanetTeffCalc(Calculator):
         return teff_err_max
 
 
-class StarTeffCalc(Calculator):
+class StarTeffBySpCalc:
     __ParsedSpClass = namedtuple("ParsedSpClass", ["letter", "number"], defaults=["", 0.0])
-    __TableValue = namedtuple("ParsedSpClass", ["teff", "err"], defaults=[0.0, 0.0])
-
-    def __init__(self, ms_type: type) -> None:
-        super().__init__(ms_type)
+    TableValue = namedtuple("ParsedSpClass", ["teff", "err"], defaults=[0.0, 0.0])
 
     @property
     def SpClassTable(self):
@@ -171,7 +168,7 @@ class StarTeffCalc(Calculator):
         return table
     
     def __parse_sp_class(self, sp_class: str) -> __ParsedSpClass:
-        sp_pattern1 = re.compile(r"^[BAFGKM]\d(\.\d)?")
+        sp_pattern1 = r"^[BAFGKM]\d(\.\d)?"
         sp_match1 = re.match(sp_pattern1, sp_class)
         if sp_match1:
             sp_cleared = sp_match1.group(0)
@@ -182,7 +179,7 @@ class StarTeffCalc(Calculator):
             
             return parsed_sp
         
-        sp_pattern2 = re.compile(r"^[BAFGKM]")
+        sp_pattern2 = r"^[BAFGKM]"
         sp_match2 = re.match(sp_pattern2, sp_class)
         if sp_match2:
             sp_cleared = sp_match2.group(0)
@@ -194,7 +191,7 @@ class StarTeffCalc(Calculator):
             return parsed_sp
 
 
-    def __vals_from_table(self, p_sp_class: __ParsedSpClass) -> __TableValue:
+    def __vals_from_table(self, p_sp_class: __ParsedSpClass) -> TableValue:
         def interval_by_letter(letter: str) -> Tuple[float, float]:
             interval = self.SpClassTable[letter]
 
@@ -218,7 +215,7 @@ class StarTeffCalc(Calculator):
         def get_val_for_digit(interval: Tuple[float, float], 
                               delta: float, digit: float, err: float) -> float:
             start = interval[0]
-            val = start + delta * digit + err
+            val = start + delta * (10 - digit) - err
 
             return val
         
@@ -237,7 +234,7 @@ class StarTeffCalc(Calculator):
             delta = get_delta_for_nondigit(interval)
             err = get_err(delta)
             val = get_val_for_nondigit(interval, err)
-            table_val = self.__TableValue(val, err)
+            table_val = self.TableValue(val, err)
 
             return table_val
         
@@ -245,36 +242,13 @@ class StarTeffCalc(Calculator):
             delta = get_delta_for_digit(interval)
             err = get_err(delta)
             val = get_val_for_digit(interval, delta, number, err)
-            table_val = self.__TableValue(val, err)
+            table_val = self.TableValue(val, err)
 
             return table_val
         
-    def fval(self, *args, **kwargs) -> float:
-        sp_type = kwargs["star_sp_type"]
+    def calc(self, sp_class: str) -> TableValue:
+        p_sp_class = self.__parse_sp_class(sp_class)
+        if p_sp_class:
+            t_value = self.__vals_from_table(p_sp_class)
 
-        p_sp_class = self.__parse_sp_class(sp_type)
-        table_val = self.__vals_from_table(p_sp_class)
-        teff = table_val.teff
-
-        return teff
-    
-    def __ferr(self, sp_type: str) -> float:
-        p_sp_class = self.__parse_sp_class(sp_type)
-        table_val = self.__vals_from_table(p_sp_class)
-        err = table_val.err
-
-        return err
-    
-    def ferr_min(self, val: float, *args, **kwargs):
-        sp_type = kwargs["star_sp_type"]
-
-        err_min = self.__ferr(sp_type)
-
-        return err_min
-    
-    def ferr_max(self, val: float, *args, **kwargs):
-        sp_type = kwargs["star_sp_type"]
-
-        err_max = self.__ferr(sp_type)
-
-        return err_max
+            return t_value
