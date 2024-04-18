@@ -1,7 +1,6 @@
 from numpy import power, sqrt, pi
 from abc import ABC, abstractmethod
-from typing import Callable, Iterable
-from measures import Measure, AU_M
+import measures as ms
 
 G = 6.6743e-11
 G_RERR = 5e-5
@@ -24,23 +23,23 @@ class Calculator(ABC):
 
     def calc(self, *args, **kwargs):
         val = self.fval(*args, **kwargs)
-        err_min = self.ferr_min(*args, **kwargs)
-        err_max = self.ferr_max(*args, **kwargs)
+        err_min = self.ferr_min(val, *args, **kwargs)
+        err_max = self.ferr_max(val, *args, **kwargs)
 
         ms = self.__ms_type(val, err_min, err_max)
         return ms
     
 
 class SemiMajorAxisCalc(Calculator):
-    def __init__(self, ms_type: type) -> None:
-        super().__init__(ms_type)
+    def __init__(self) -> None:
+        super().__init__(ms.SemiMajorAxis)
 
     def fval(self, *args, **kwargs) -> float:
-        star_m = kwargs["star_m"].val_kg
-        period = kwargs["period"].val_s
+        star_m = kwargs["star_mass"].val_kg
+        period = kwargs["orbital_period"].val_s
 
         sm_axis_m = power((G * star_m * period ** 2) / (4 * pi ** 2), 1 / 3)
-        sm_axis = sm_axis_m / AU_M
+        sm_axis = sm_axis_m / ms.AU_M
 
         return sm_axis
 
@@ -51,33 +50,33 @@ class SemiMajorAxisCalc(Calculator):
         return err
     
     def ferr_min(self, val: float, *args, **kwargs):
-        star_m_rerr_min = kwargs["star_m"].rerr_min
-        period_rerr_min = kwargs["period"].rerr_min
+        star_m_rerr_min = kwargs["star_mass"].rerr_min
+        period_rerr_min = kwargs["orbital_period"].rerr_min
 
         err_min = self.__ferr(val, star_m_rerr_min, period_rerr_min)
 
         return err_min
     
     def ferr_max(self, val: float, *args, **kwargs):
-        star_m_rerr_max = kwargs["star_m"].rerr_max
-        period_rerr_max = kwargs["period"].rerr_max
+        star_m_rerr_max = kwargs["star_mass"].rerr_max
+        period_rerr_max = kwargs["orbital_period"].rerr_max
 
         err_max = self.__ferr(val, star_m_rerr_max, period_rerr_max)
 
         return err_max
     
 
-class TeffCalc(Calculator):
-    def __init__(self, ms_type: type) -> None:
-        super().__init__(ms_type)
+class PlanetTeffCalc(Calculator):
+    def __init__(self) -> None:
+        super().__init__(ms.TempCalculated)
 
     def fval(self, *args, **kwargs) -> float:
-        star_t = kwargs["star_t"].val
-        star_r = kwargs["star_r"].val_m
-        sm_axis = kwargs["sm_axis"].val_m
+        star_t = kwargs["star_teff"].val
+        star_r = kwargs["star_radius"].val_m
+        sm_axis = kwargs["semi_major_axis"].val_m
 
         alb = kwargs.get("alb").val if kwargs.get("alb") is not None else 0
-        ecc = kwargs.get("ecc").val if kwargs.get("ecc") is not None else 0
+        ecc = kwargs.get("eccentricity").val if kwargs.get("eccentricity") is not None else 0
 
         ttype = kwargs.get("ttype", "mean")
 
@@ -97,7 +96,7 @@ class TeffCalc(Calculator):
 
         return teff
     
-    def __ferr(val: float, star_t_rerr: float, star_r_rerr: float, sm_axis_rerr: float, 
+    def __ferr(self, val: float, star_t_rerr: float, star_r_rerr: float, sm_axis_rerr: float, 
                alb_rerr: float, ecc: float, ecc_err: float, ttype: str):
         if ttype == "mean":
             dist_err = sm_axis_rerr
@@ -117,13 +116,13 @@ class TeffCalc(Calculator):
         return teff_err
     
     def ferr_min(self, val: float, *args, **kwargs):
-        star_t_rerr_min = kwargs["star_t"].rerr_min
-        star_r_rerr_min = kwargs["star_r"].rerr_min
-        sm_axis_rerr_min = kwargs["sm_axis"].rerr_min
+        star_t_rerr_min = kwargs["star_teff"].rerr_min
+        star_r_rerr_min = kwargs["star_radius"].rerr_min
+        sm_axis_rerr_min = kwargs["semi_major_axis"].rerr_min
 
         alb_rerr_min = kwargs.get("alb", 0).rerr_min if kwargs.get("alb") is not None else 0
-        ecc = kwargs.get("ecc", 0).val if kwargs.get("alb") is not None else 0
-        ecc_err_min = kwargs.get("ecc", 0).err_min if kwargs.get("alb") is not None else 0
+        ecc = kwargs.get("eccentricity", 0).val if kwargs.get("eccentricity") is not None else 0
+        ecc_err_min = kwargs.get("eccentricity", 0).err_min if kwargs.get("eccentricity") is not None else 0
 
         ttype = kwargs.get("ttype", "mean")
 
@@ -133,13 +132,13 @@ class TeffCalc(Calculator):
         return teff_err_min
     
     def ferr_max(self, val: float, *args, **kwargs):
-        star_t_rerr_max = kwargs["star_t"].rerr_max
-        star_r_rerr_max = kwargs["star_r"].rerr_max
-        sm_axis_rerr_max = kwargs["sm_axis"].rerr_max
+        star_t_rerr_max = kwargs["star_teff"].rerr_max
+        star_r_rerr_max = kwargs["star_radius"].rerr_max
+        sm_axis_rerr_max = kwargs["semi_major_axis"].rerr_max
 
         alb_rerr_max = kwargs.get("alb", 0).rerr_max if kwargs.get("alb") is not None else 0
-        ecc = kwargs.get("ecc", 0).val if kwargs.get("alb") is not None else 0
-        ecc_err_max = kwargs.get("ecc", 0).err_max if kwargs.get("alb") is not None else 0
+        ecc = kwargs.get("eccentricity", 0).val if kwargs.get("eccentricity") is not None else 0
+        ecc_err_max = kwargs.get("eccentricity", 0).err_max if kwargs.get("eccentricity") is not None else 0
 
         ttype = kwargs.get("ttype", "mean")
 
