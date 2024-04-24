@@ -2,6 +2,7 @@ import measures as ms
 import re
 from abc import ABC, abstractmethod
 from collections import namedtuple
+from numpy import arange
 
 _TableValue = namedtuple("TableValue", ["val", "err"], defaults=[0.0, 0.0])
 _Interval = namedtuple("Interval", ["min", "max"], defaults=[0.0, 0.0])
@@ -28,12 +29,13 @@ class Table[TTableKey, TValIn](ABC):
         ms_type = self.__ms_type
 
         table_value = self._get_table_value(val_in)
-        val_out = table_value.val
-        err_out = table_value.err
+        if table_value:
+            val_out = table_value.val
+            err_out = table_value.err
 
-        ms_value = ms_type(val_out, err_out, err_out)
+            ms_value = ms_type(val_out, err_out, err_out)
 
-        return ms_value
+            return ms_value
     
     def get_err_by_val(self, val: float) -> float:
         t_vals = list(self.table.values())
@@ -43,7 +45,7 @@ class Table[TTableKey, TValIn](ABC):
                 return t_vals[i - 1].err
             
             
-class StrTable(ABC, Table[str, str]):
+class StrTable(Table[str, str]):
     def __init__(self, table: dict[str, _TableValue], ms_type: type) -> None:
         super().__init__(table, ms_type)
 
@@ -53,7 +55,7 @@ class StrTable(ABC, Table[str, str]):
         return table_value
     
 
-class IntervalTable(ABC, Table[_Interval, float]):
+class IntervalTable(Table[_Interval, float]):
     def __init__(self, table: dict[_Interval, _TableValue], ms_type: type) -> None:
         super().__init__(table, ms_type)
     
@@ -83,7 +85,7 @@ class SpClassTeffTable(StrTable):
 
             new_table[key] = _TableValue(val=val, err=err)
 
-            for sub in range(9):
+            for sub in arange(0, 9, 0.5):
                 key = "{cl}{sub}".format(cl=cl_let, sub=sub)
 
                 sub_intr = (cl_intr[1] - cl_intr[0]) / 10
@@ -126,8 +128,9 @@ class SpClassTeffTable(StrTable):
 
     def _get_table_value(self, val_in: str) -> _TableValue:
         parsed_sp = self.__parse_sp_class(val_in)
-        sp_cl = self.__build_sp_class(parsed_sp)
+        if parsed_sp:
+            sp_cl = self.__build_sp_class(parsed_sp)
 
-        table_value = super()._get_table_value(sp_cl)
+            table_value = super()._get_table_value(sp_cl)
 
-        return table_value
+            return table_value

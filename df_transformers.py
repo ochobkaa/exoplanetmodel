@@ -34,7 +34,7 @@ class DFTransformer(ABC):
         return new_df
 
 
-class DFCalculation(ABC, DFTransformer):
+class DFCalculation(DFTransformer):
     def __init__(self, 
                  con: MeasureConverter, cal: calc.Calculator, rou: err.Round,
                  col: str, col_type: type, args: Dict[str, type]
@@ -129,7 +129,7 @@ class DFPlanetTeffMeanCalc(DFCalculation):
         )
     
 
-class DFValFromTable[TTableKey, TValIn](ABC, DFTransformer):
+class DFValFromTable[TTableKey, TValIn](DFTransformer):
     def __init__(self, con: MeasureConverter, table: tab.Table[TTableKey, TValIn],
                  col: str, col_type: type, col_arg: str, col_arg_type: type) -> None:
         super().__init__(con)
@@ -139,7 +139,7 @@ class DFValFromTable[TTableKey, TValIn](ABC, DFTransformer):
         self.__col_arg = col_arg
         self.__col_arg_type = col_arg_type
 
-    def set_vals(self, val: TValIn, df: pd.DataFrame) -> pd.DataFrame:
+    def set_vals(self, df: pd.DataFrame) -> pd.DataFrame:
         def vals_from_table(table: tab.Table[TTableKey, TValIn],
                             col_vals: Iterable[ms.Measure],
                             cargs: Iterable[TValIn]) -> Iterable[ms.Measure]:
@@ -161,7 +161,7 @@ class DFValFromTable[TTableKey, TValIn](ABC, DFTransformer):
         col_arg_type = self.__col_arg_type
 
         col_ms = self._col_measures(df, col, col_type)
-        col_args = self._col_vals[TValIn](df, col_arg, col_arg_type)
+        col_args = self._col_vals(df, col_arg, col_arg_type)
         tvals_ms = vals_from_table(table, col_ms, col_args)
         new_df = self._write_measures(df, tvals_ms, col)
         
@@ -169,13 +169,13 @@ class DFValFromTable[TTableKey, TValIn](ABC, DFTransformer):
     
 
 class DFStarTeffBySpClassCalc(DFValFromTable[str, float]):
-    def __init__(self, con: MeasureConverter, table: tab.SpClassTeffTable, col: str, col_arg: str) -> None:
+    def __init__(self, con: MeasureConverter, table: tab.SpClassTeffTable) -> None:
         super().__init__(
             con,
             table,
-            col,
+            "star_teff",
             ms.StarTeff,
-            col_arg,
+            "star_sp_type",
             str
         )
 
