@@ -85,7 +85,7 @@ class SpClassTeffTable(StrTable):
 
             new_table[key] = _TableValue(val=val, err=err)
 
-            for sub in arange(0, 9, 0.5):
+            for sub in arange(0, 10, 0.5):
                 key = "{cl}{sub}".format(cl=cl_let, sub=sub)
 
                 sub_intr = (cl_intr[1] - cl_intr[0]) / 10
@@ -94,6 +94,7 @@ class SpClassTeffTable(StrTable):
 
                 new_table[key] = _TableValue(val=val, err=err)
 
+        print(new_table)
         return new_table
                 
     def __parse_sp_class(self, sp_class: str) -> __ParsedSpClass:
