@@ -2,43 +2,62 @@ import pandas as pd
 import measures as ms
 import calculators as calc
 import errors as err
+import tables as tab
 from conversion import MeasureConverter
 from abc import ABC, abstractmethod
 from typing import Iterable, Dict
 
-class DFCalculation(ABC):
+
+class DFTransformer(ABC):
+    def __init__(self, con: MeasureConverter) -> None:
+        self.__con = con
+
+    def _col_measures(self, df: pd.DataFrame, 
+                      col: str, col_type: type) -> Iterable[ms.Measure]:
+        con = self.__con
+        measures = list(con.read(col, col_type, df))
+
+        return measures
+
+    def _col_vals[T](self, df: pd.DataFrame, col: str, val_type: type) -> Iterable[T]:
+        vals = df.get("star_sp_type").map(val_type).to_list()
+
+        return vals
+    
+    def _write_measures(self, df: pd.DataFrame, vals: Iterable[ms.Measure], 
+                        col: str) -> pd.DataFrame:
+        con = self.__con
+
+        vals_list = list(vals)
+        new_df = con.write(col, vals_list, df)
+
+        return new_df
+
+
+class DFCalculation(ABC, DFTransformer):
     def __init__(self, 
                  con: MeasureConverter, cal: calc.Calculator, rou: err.Round,
-                 col_calc: str, col_type: type, args: Dict[str, type]
+                 col: str, col_type: type, args: Dict[str, type]
                 ) -> None:
-        self.__con = con
+        super().__init__(con)
+        self.__col = col
+        self.__col_type = col_type
         self.__cal = cal
         self.__rou = rou
-        self.__col_calc = col_calc
-        self.__col_type = col_type
         self.__args = args
 
     def calc(self, df: pd.DataFrame) -> pd.DataFrame:
-        def args_measures(con: MeasureConverter, 
-                          args: Dict[str, type], 
-                          df: pd.DataFrame) -> Dict[str, Iterable[ms.Measure]]:
+        def args_measures(df: pd.DataFrame, 
+                          args: Dict[str, type]) -> Dict[str, Iterable[ms.Measure]]:
             args_ms = {}
             for arg_col, arg_type in args.items():
-                args_ms[arg_col] = list(con.read(arg_col, arg_type, df))
+                args_ms[arg_col] = self._col_measures(df, arg_col, arg_type)
 
             return args_ms
         
         def arg_isna(*args):
             isna = not all(map(lambda a: pd.notna(a.val), *args))
             return isna
-        
-        def col_measures(con: MeasureConverter,
-                         col_calc: str,
-                         col_type: type,
-                         df: pd.DataFrame) -> Iterable[ms.Measure]:
-            measures = list(con.read(col_calc, col_type, df))
-
-            return measures
         
         def calc_measures(cal: calc.Calculator, rou: err.Round, col_ms: Iterable[ms.Measure],
                           args_ms: Dict[str, Iterable[ms.Measure]]) -> Iterable[ms.Measure]:
@@ -62,28 +81,17 @@ class DFCalculation(ABC):
                     calc_ms_rou = ms_t(rou_val, rou_err, rou_err)
                     
                     yield calc_ms_rou
-                
 
-        def write_measures(con: MeasureConverter, 
-                           col: str, 
-                           vals: Iterable[ms.Measure], 
-                           df: pd.DataFrame) -> pd.DataFrame:
-            vals_list = list(vals)
-            new_df = con.write(col, vals_list, df)
-
-            return new_df
-
-        con = self.__con
         cal = self.__cal
         rou = self.__rou
-        col_calc = self.__col_calc
+        col = self.__col
         col_type = self.__col_type
         args = self.__args
 
-        col_ms = col_measures(con, col_calc, col_type, df)
-        args_ms = args_measures(con, args, df)
+        col_ms = self._col_measures(df, col, col_type)
+        args_ms = args_measures(df, args)
         calc_ms = calc_measures(cal, rou, col_ms, args_ms)
-        new_df = write_measures(con, col_calc, calc_ms, df)
+        new_df = self._write_measures(df, calc_ms, col)
 
         return new_df
     
@@ -119,80 +127,69 @@ class DFPlanetTeffMeanCalc(DFCalculation):
                 "semi_major_axis": ms.SemiMajorAxis
             }
         )
+    
 
+class DFValFromTable[TTableKey, TValIn](ABC, DFTransformer):
+    def __init__(self, con: MeasureConverter, table: tab.Table[TTableKey, TValIn],
+                 col: str, col_type: type, col_arg: str, col_arg_type: type) -> None:
+        super().__init__(con)
+        self.__table = table
+        self.__col = col
+        self.__col_type = col_type
+        self.__col_arg = col_arg
+        self.__col_arg_type = col_arg_type
 
-class DFStarTeffBySpClassCalc(DFCalculation):
-    def __init__(self, con: MeasureConverter, cal: calc.StarTeffBySpCalc) -> None:
-        self.__con = con
-        self.__teff_calc = cal
+    def set_vals(self, val: TValIn, df: pd.DataFrame) -> pd.DataFrame:
+        def vals_from_table(table: tab.Table[TTableKey, TValIn],
+                            col_vals: Iterable[ms.Measure],
+                            cargs: Iterable[TValIn]) -> Iterable[ms.Measure]:
+            for carg, col_val in zip(cargs, col_vals):
+                if col_val and pd.notna(col_val.val):
+                    yield col_val
 
-    def calc(self, df: pd.DataFrame) -> pd.DataFrame:
-        def read_sp_types(df: pd.DataFrame) -> Iterable[str]:
-            sp_types = df.get("star_sp_type").map(str).to_list()
-
-            return sp_types
-        
-        def read_star_teff(con: MeasureConverter, df: pd.DataFrame) -> Iterable[ms.StarTeff]:
-            star_teff_ms = list(con.read("star_teff", ms.StarTeff, df))
-
-            return star_teff_ms
-        
-        def calc_steff(cal: calc.StarTeffBySpCalc, sp_types: Iterable[str], star_teff: Iterable[ms.StarTeff]) -> Iterable[ms.StarTeff]:
-            for sp_type, steff_ms in zip(sp_types, star_teff):
-                if steff_ms and pd.notna(steff_ms.val):
-                    yield steff_ms
-
-                elif not sp_type:
+                elif not carg:
                     yield None
                 
                 else:
-                    t_value = cal.calc(sp_type)
-                    if t_value:
-                        new_ms = ms.StarTeff(t_value.teff, t_value.err, t_value.err)
-
-                        yield new_ms
-
-                    else:
-                        yield None
-
-        def write_measures(con: MeasureConverter, 
-                           col: str, 
-                           vals: Iterable[ms.Measure], 
-                           df: pd.DataFrame) -> pd.DataFrame:
-            vals_list = list(vals)
-            new_df = con.write(col, vals_list, df)
-
-            return new_df
+                    new_ms = table.get_ms(carg)
+                    yield new_ms
         
-        con = self.__con
-        cal = self.__teff_calc
+        table = self.__table
+        col = self.__col
+        col_type = self.__col_type
+        col_arg = self.__col_arg
+        col_arg_type = self.__col_arg_type
 
-        sp_types = read_sp_types(df)
-        steff_ms = read_star_teff(con, df)
-        steff_ms_calc = calc_steff(cal, sp_types, steff_ms)
-        new_df = write_measures(con, "star_teff", steff_ms_calc, df)
-
+        col_ms = self._col_measures(df, col, col_type)
+        col_args = self._col_vals[TValIn](df, col_arg, col_arg_type)
+        tvals_ms = vals_from_table(table, col_ms, col_args)
+        new_df = self._write_measures(df, tvals_ms, col)
+        
         return new_df
+    
+
+class DFStarTeffBySpClassCalc(DFValFromTable[str, float]):
+    def __init__(self, con: MeasureConverter, table: tab.SpClassTeffTable, col: str, col_arg: str) -> None:
+        super().__init__(
+            con,
+            table,
+            col,
+            ms.StarTeff,
+            col_arg,
+            str
+        )
 
 
-class DFErrorGen:
+class DFErrorGen(DFTransformer):
     def __init__(self,
                  con: MeasureConverter,  err_gen: err.ErrorGenerator,
-                 col_gen: str, col_type: type) -> None:
-        self.__con = con
+                 col: str, col_type: type) -> None:
+        super().__init__(con)
         self.__err_gen = err_gen
-        self.__col_gen = col_gen
+        self.__col = col
         self.__col_type = col_type
 
     def gen(self, df: pd.DataFrame) -> pd.DataFrame:
-        def col_measures(con: MeasureConverter,
-                         col_gen: str,
-                         col_type: type, 
-                         df: pd.DataFrame) -> Iterable[ms.Measure]:
-            measures = list(con.read(col_gen, col_type, df))
-
-            return measures
-
         def gen_errs(measures: Iterable[ms.Measure], 
                      err_gen: err.ErrorGenerator, 
                      ms_type: type) -> Iterable[ms.Measure]:
@@ -219,22 +216,12 @@ class DFErrorGen:
                 else:
                     yield ms
 
-        def write_measures(con: MeasureConverter, 
-                           col: str, 
-                           vals: Iterable[ms.Measure], 
-                           df: pd.DataFrame) -> pd.DataFrame:
-            vals_list = list(vals)
-            new_df = con.write(col, vals_list, df, write_val=False)
-
-            return new_df
-
-        con = self.__con
         err_gen = self.__err_gen
-        col_gen = self.__col_gen
+        col = self.__col
         col_type = self.__col_type
 
-        measures = col_measures(con, col_gen, col_type, df)
+        measures = self._col_measures(df, col, col_type)
         new_measures = gen_errs(measures, err_gen, col_type)
-        new_df = write_measures(con, col_gen, new_measures, df)
+        new_df = self._write_measures(df, new_measures, col)
 
         return new_df
