@@ -1,7 +1,6 @@
 import numpy as np
 from abc import ABC, abstractmethod
 
-
 class ErrorGenerator(ABC):
     @abstractmethod
     def gen(self, val: float):
@@ -65,36 +64,34 @@ class Round:
         abs_val = abs(val)
         if abs_val > 0:
             order = int(np.log10(abs_val))
+            if abs_val < 1:
+                order = order - 1
+
             return order
     
-    def __norm(self, val: float, order: float = None) -> float:
-        if not order:
-            order = self.__order(val)
+    def __norm(self, val: float, order: int = None) -> float:
+        if order == None:
+            new_order = self.__order(val)
 
-        if not order:
-            return
-
-        if val < 1:
-            norm = val * 10 ** (1 - order)
-            return norm
-        
         else:
-            norm = val * 10 ** (-order)
-            return norm
+            new_order = order
+
+        if new_order == None:
+            return
+        
+        norm = val * 10 ** (-new_order)
+        return norm
     
     def __round(self, val: float, order: int) -> float:
         val_order = self.__order(val)
-        if not val_order:
+        if val_order == None:
             return
 
         norm = self.__norm(val, val_order)
+
         norm_r = round(norm, abs(order))
 
-        if val < 1:
-            val_r = norm_r * 10 ** (val_order - 1)
-
-        else:
-            val_r = norm_r * 10 ** val_order
+        val_r = norm_r * 10 ** val_order
 
         return val_r
     
@@ -118,5 +115,5 @@ class Round:
         if not err_ord:
             return val
 
-        val_r = self.__round(val, err_ord + 1)
+        val_r = self.__round(val, err_ord)
         return val_r
