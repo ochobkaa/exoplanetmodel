@@ -52,7 +52,7 @@ class SemiMajorAxisCalc(Calculator):
 
         return err
     
-    def ferr_min(self, val: float, *args, **kwargs):
+    def ferr_min(self, val: float, *args, **kwargs) -> float:
         star_m_rerr_min = kwargs["star_mass"].rerr_min
         period_rerr_min = kwargs["orbital_period"].rerr_min
 
@@ -60,7 +60,7 @@ class SemiMajorAxisCalc(Calculator):
 
         return err_min
     
-    def ferr_max(self, val: float, *args, **kwargs):
+    def ferr_max(self, val: float, *args, **kwargs) -> float:
         star_m_rerr_max = kwargs["star_mass"].rerr_max
         period_rerr_max = kwargs["orbital_period"].rerr_max
 
@@ -100,7 +100,7 @@ class PlanetTeffCalc(Calculator):
         return teff
     
     def __ferr(self, val: float, star_t_rerr: float, star_r_rerr: float, sm_axis_rerr: float, 
-               alb_rerr: float, ecc: float, ecc_err: float, ttype: str):
+               alb_rerr: float, ecc: float, ecc_err: float, ttype: str) -> float:
         if ttype == "mean":
             dist_err = sm_axis_rerr
 
@@ -118,7 +118,7 @@ class PlanetTeffCalc(Calculator):
 
         return teff_err
     
-    def ferr_min(self, val: float, *args, **kwargs):
+    def ferr_min(self, val: float, *args, **kwargs) -> float:
         star_t_rerr_min = kwargs["star_teff"].rerr_min
         star_r_rerr_min = kwargs["star_radius"].rerr_min
         sm_axis_rerr_min = kwargs["semi_major_axis"].rerr_min
@@ -134,7 +134,7 @@ class PlanetTeffCalc(Calculator):
         
         return teff_err_min
     
-    def ferr_max(self, val: float, *args, **kwargs):
+    def ferr_max(self, val: float, *args, **kwargs) -> float:
         star_t_rerr_max = kwargs["star_teff"].rerr_max
         star_r_rerr_max = kwargs["star_radius"].rerr_max
         sm_axis_rerr_max = kwargs["semi_major_axis"].rerr_max
@@ -149,3 +149,38 @@ class PlanetTeffCalc(Calculator):
                                    alb_rerr_max, ecc, ecc_err_max, ttype)
         
         return teff_err_max
+    
+class StarMassCalc(Calculator):
+    def __init__(self) -> None:
+        super().__init__(ms.StarMass)
+
+    def fval(self, *args, **kwargs) -> float:
+        period = kwargs["orbital_period"].val_s
+        sm_axis = kwargs["semi_major_axis"].val_m
+
+        star_mass_kg = (4 * (pi ** 2) * (sm_axis ** 3)) / (G * period ** 2)
+        star_mass = star_mass_kg / ms.SOL_MASS_KG
+
+        return star_mass
+    
+    def __ferr(self, val: float, period_re: float, sm_axis_re: float) -> float:
+        rerr = G_RERR + period_re * 2 + sm_axis_re * 3
+        err = val * rerr
+
+        return err
+    
+    def ferr_min(self, val: float, *args, **kwargs) -> float:
+        period_remin = kwargs["orbital_period"].rerr_min
+        sm_axis_remin = kwargs["semi_major_axis"].rerr_min
+
+        err_min = self.__ferr(val, period_remin, sm_axis_remin)
+
+        return err_min
+    
+    def ferr_max(self, val: float, *args, **kwargs) -> float:
+        period_remax = kwargs["orbital_period"].rerr_max
+        sm_axis_remax = kwargs["semi_major_axis"].rerr_max
+
+        err_max = self.__ferr(val, period_remax, sm_axis_remax)
+
+        return err_max
