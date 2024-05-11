@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import measures as ms
 import calculators as calc
 import errors as err
@@ -20,7 +21,7 @@ class DFTransformer(ABC):
         return measures
 
     def _col_vals[T](self, df: pd.DataFrame, col: str, val_type: type) -> Iterable[T]:
-        vals = df.get("star_sp_type").map(val_type).to_list()
+        vals = df.get(col).map(val_type).to_list()
 
         return vals
     
@@ -46,15 +47,15 @@ class DFCalculation(DFTransformer):
         self.__rou = rou
         self.__args = args
 
-    def calc(self, df: pd.DataFrame) -> pd.DataFrame:
-        def args_measures(df: pd.DataFrame, 
+    def _args_measures(self, df: pd.DataFrame, 
                           args: Dict[str, type]) -> Dict[str, Iterable[ms.Measure]]:
-            args_ms = {}
-            for arg_col, arg_type in args.items():
-                args_ms[arg_col] = self._col_measures(df, arg_col, arg_type)
+        args_ms = {}
+        for arg_col, arg_type in args.items():
+            args_ms[arg_col] = self._col_measures(df, arg_col, arg_type)
 
-            return args_ms
-        
+        return args_ms
+
+    def calc(self, df: pd.DataFrame) -> pd.DataFrame:
         def arg_isna(*args):
             isna = not all(map(lambda a: pd.notna(a.val), *args))
             return isna
@@ -79,7 +80,7 @@ class DFCalculation(DFTransformer):
 
                     ms_t = type(calc_ms)
                     calc_ms_rou = ms_t(rou_val, rou_err, rou_err)
-                    
+
                     yield calc_ms_rou
 
         cal = self.__cal
@@ -89,7 +90,7 @@ class DFCalculation(DFTransformer):
         args = self.__args
 
         col_ms = self._col_measures(df, col, col_type)
-        args_ms = args_measures(df, args)
+        args_ms = self._args_measures(df, args)
         calc_ms = calc_measures(cal, rou, col_ms, args_ms)
         new_df = self._write_measures(df, calc_ms, col)
 
@@ -225,3 +226,68 @@ class DFErrorGen(DFTransformer):
         new_df = self._write_measures(df, new_measures, col)
 
         return new_df
+    
+
+class DFStarCalculator(DFCalculation):
+    def __init__(self, con: MeasureConverter, 
+                 cal: calc.Calculator, rou: err.Round, star_calc_t: type,
+                 col: str, col_type: type, args: Dict[str, type]) -> None:
+        super().__init__(con, cal, rou, col, col_type, args)
+        self.__con = con
+        self.__col = col
+        self.__col_type = col_type
+        self.__star_calc = star_calc_t(rou, col_type)
+
+    def calc(self, df: pd.DataFrame) -> pd.DataFrame:
+        def get_stars(df: pd.DataFrame) -> Iterable[str]:
+            col = self.__col
+            col_nulls = df[pd.isna(df[col])]
+
+            stars = list(set(col_nulls["star_name"].to_list()))
+
+            return stars
+
+        def select_star_planets(df: pd.DataFrame, star_name: str) -> pd.DataFrame:
+            star_planets = df[df.star_name == star_name]
+
+            return star_planets
+        
+        def write_star(df: pd.DataFrame, con: MeasureConverter, s_ms: ms.Measure, col: str, star_name: str) -> pd.DataFrame:
+            cond = "star_name == \"{star_name}\"".format(star_name=star_name)
+            new_df = con.write_val_if(col, s_ms, df, cond)
+
+            return new_df
+
+        con = self.__con
+        col = self.__col
+        col_type = self.__col_type
+        star_calc = self.__star_calc        
+
+        stars = get_stars(df)
+        new_df = df
+        for star in stars:
+            star_planets = select_star_planets(df, star)
+            p_vals = super().calc(star_planets)
+            p_col_ms = self._col_measures(p_vals, col, col_type)
+
+            s_ms = star_calc.calc(p_col_ms)
+            
+            new_df = write_star(new_df, con, s_ms, col, star)
+
+        return new_df
+    
+
+class DFStarMassCalculator(DFStarCalculator):
+    def __init__(self, con: MeasureConverter, cal: calc.StarMassCalc, rou: err.Round, star_calc_t: type) -> None:
+        super().__init__(
+            con, 
+            cal, 
+            rou, 
+            star_calc_t, 
+            "star_mass", 
+            ms.StarMass, 
+            {
+                "semi_major_axis": ms.SemiMajorAxis,
+                "orbital_period": ms.OrbitalPeriod
+            }
+        )
