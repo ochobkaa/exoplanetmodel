@@ -1,7 +1,7 @@
 import sklearn.tree as tree
 import numpy as np
 import pandas as pd
-from typing import Iterable
+from typing import Iterable, Callable
 
 class RTreeOutlierCleaner:
     def __init__(self) -> None:
@@ -27,22 +27,34 @@ class RTreeOutlierCleaner:
 
         y_calcs = self.__tree.predict(xmatr)
         for yv, yc in zip(y_vals, y_calcs):
-            delta = (yv - yc) ** 2
+            delta = abs(yv - yc)
             yield delta
+
+    def __deltas_curve(self, deltas: Iterable[float], curv_f: Callable[[float], float]) -> Iterable[float]:
+        curved = list(map(curv_f, deltas))
+
+        return curved
 
     def __get_mask(self, deltas: Iterable[float], est: float) -> Iterable[bool]:
         mask = list(map(lambda s: s < est, deltas))
 
         return mask
     
-    def clean(self, df: pd.DataFrame, x_col: str, y_col: str, stdmul: float) -> pd.DataFrame:
+    def clean(self, df: pd.DataFrame, x_col: str, y_col: str, est: float, log_data=False) -> pd.DataFrame:
+        curve = lambda x: 1 - 1 / (x ** 2 + 1)
+
         x = df[x_col].to_list()
         y = df[y_col].to_list()
+
+        if log_data:
+            x = list(map(np.log10, x))
+            y = list(map(np.log10, y))
+
         self.__fit_tree(x, y)
         
         dev = self.__deltas(x, y)
-        std = self.__stddev(y)
-        mask = self.__get_mask(dev, std * stdmul)
+        cur_dev = self.__deltas_curve(dev, curve)
+        mask = self.__get_mask(cur_dev, est)
 
         cl_df = df[mask]
 
