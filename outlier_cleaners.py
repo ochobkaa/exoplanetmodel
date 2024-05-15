@@ -1,11 +1,17 @@
 import sklearn.tree as tree
+import sklearn.ensemble as ens
 import numpy as np
 import pandas as pd
 from typing import Iterable, Callable
 
 class RTreeOutlierCleaner:
-    def __init__(self) -> None:
-        self.__tree = tree.DecisionTreeRegressor(max_depth=4, min_samples_leaf=10)
+    def __init__(self, depth: int, min_leaf: int, tree_count=1, seed=None) -> None:
+        if tree_count == 1:
+            self.__tree = tree.DecisionTreeRegressor(max_depth=depth, min_samples_leaf=min_leaf)
+
+        else:
+            self.__tree = ens.RandomForestRegressor(n_estimators=tree_count, max_depth=depth, 
+                                                    min_samples_leaf=min_leaf, random_state=seed)
 
     def __get_xmatr(self, x: Iterable[float]) -> np.ndarray:
         xmatr = list(zip(range(len(x)), x))
