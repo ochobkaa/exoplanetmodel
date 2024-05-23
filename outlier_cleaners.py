@@ -14,7 +14,7 @@ class RTreeOutlierCleaner:
                                                     min_samples_leaf=min_leaf, random_state=seed)
 
     def __get_xmatr(self, x: Iterable[float]) -> np.ndarray:
-        xmatr = list(zip(range(len(x)), x))
+        xmatr = np.array(x).reshape(-1, 1)
 
         return xmatr
 

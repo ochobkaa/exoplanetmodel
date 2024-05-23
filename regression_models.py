@@ -6,6 +6,7 @@ import sklearn.pipeline as pp
 import sklearn.linear_model as lin
 import sklearn.preprocessing as pre
 from sklearn.model_selection import train_test_split
+import consts as c
 
 class NotLearnedError(Exception):
     def __init__(self, *args: object) -> None:
@@ -43,9 +44,6 @@ class Regression(ABC):
     @property
     def R2(self) -> float:
         return 0.0
-    
-JUP_MASS_EARTH = 316.8
-JUP_RAD_EARTH = 11.2
 
 class MassRadiusLogRegression(Regression):
     def __init__(self) -> None:
@@ -53,19 +51,13 @@ class MassRadiusLogRegression(Regression):
         self.__reg = pp.make_pipeline(pre.SplineTransformer(n_knots=5, degree=3), lin.Ridge(alpha=0.05))
         self.__R2 = 0.0
 
-    def __mass_log(self, df: pd.DataFrame) -> list[float]:
-        return df["mass"].apply(lambda x: np.log10(x * JUP_MASS_EARTH)).to_list()
-    
-    def __radius_log(self, df: pd.DataFrame) -> list[float]:
-        return df["radius"].apply(lambda x: np.log10(x * JUP_RAD_EARTH)).to_list()
-
     def _learn(self, df: pd.DataFrame) -> None:
         reg = self.__reg
 
-        mass_log = self.__mass_log(df)
-        radius_log = self.__radius_log(df)
+        mass_log = c.mass_log(df)
+        radius_log = c.radius_log(df)
 
-        mass_logX = list(zip(range(len(mass_log)), mass_log))
+        mass_logX = np.array(mass_log).reshape(-1, 1)
 
         mlogX_train, mass_logX_test, rlog_train, rlog_test = train_test_split(
             mass_logX,
@@ -83,7 +75,7 @@ class MassRadiusLogRegression(Regression):
         reg = self.__reg
 
         mass = kwargs["mass"]
-        mass_X = list(zip(range(len(mass)), mass))
+        mass_X = np.array(mass).reshape(-1, 1)
 
         radius = reg.predict(mass_X).tolist()
 
