@@ -1,10 +1,12 @@
 import sklearn.tree as tree
 import sklearn.ensemble as ens
+import sklearn.preprocessing as pre
 import numpy as np
 import pandas as pd
 from typing import Iterable, Callable
+import consts as c
 
-class RTreeOutlierCleaner:
+class MassRadiusOutlierCleaner:
     def __init__(self, depth: int, min_leaf: int, tree_count=1, seed=None) -> None:
         if tree_count == 1:
             self.__tree = tree.DecisionTreeRegressor(max_depth=depth, min_samples_leaf=min_leaf)
@@ -46,22 +48,40 @@ class RTreeOutlierCleaner:
 
         return mask
     
-    def clean(self, df: pd.DataFrame, x_col: str, y_col: str, est: float, log_data=False) -> pd.DataFrame:
+    def clean(self, df: pd.DataFrame, est: float) -> pd.DataFrame:
         curve = lambda x: 1 - 1 / (x ** 2 + 1)
 
-        x = df[x_col].to_list()
-        y = df[y_col].to_list()
+        mass = c.mass_log(df)
+        radius = c.radius_log(df)
 
-        if log_data:
-            x = list(map(np.log10, x))
-            y = list(map(np.log10, y))
-
-        self.__fit_tree(x, y)
+        self.__fit_tree(mass, radius)
         
-        dev = self.__deltas(x, y)
+        dev = self.__deltas(mass, radius)
         cur_dev = self.__deltas_curve(dev, curve)
         mask = self.__get_mask(cur_dev, est)
 
         cl_df = df[mask]
 
         return cl_df
+    
+
+class SPMassOutlierCleaner:
+    def __init__(self) -> None:
+        self.__rsclean = pre.StandardScaler()
+
+    def clean(self, df: pd.DataFrame, stddev=3.0) -> pd.DataFrame:
+        rsclean = self.__rsclean
+
+        s_mass = df["star_mass"].to_numpy()
+        p_mass = c.mass_log(df)
+
+        m_stack = np.column_stack([s_mass, p_mass])
+        m_trans = rsclean.fit_transform(m_stack)
+
+        mask = m_trans < stddev
+        mask_sum = mask.all(axis=1)
+        mask_l = mask_sum.tolist()
+
+        new_df = df[mask_l]
+
+        return new_df
