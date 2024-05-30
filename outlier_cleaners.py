@@ -1,6 +1,7 @@
 import sklearn.tree as tree
 import sklearn.ensemble as ens
 import sklearn.preprocessing as pre
+import sklearn.cluster as clu
 import numpy as np
 import pandas as pd
 from typing import Iterable, Callable
@@ -83,5 +84,36 @@ class SPMassOutlierCleaner:
         mask_l = mask_sum.tolist()
 
         new_df = df[mask_l]
+
+        return new_df
+    
+
+class LargePTeffRadiusCleaner:
+    def __init__(self) -> None:
+        self.__rsclean = clu.DBSCAN(eps=0.066, min_samples=10)
+
+    def __norm(self, ar: np.ndarray) -> np.ndarray:
+        amin = ar.min()
+        amax = ar.max()
+        ar_norm = (ar - amin) / (amax - amin)
+
+        return ar_norm
+
+    def clean(self, df: pd.DataFrame) -> pd.DataFrame:
+        rsclean = self.__rsclean
+
+        rad = np.array(c.radius_log(df))
+        teff = df["temp_calculated"].to_numpy()
+
+        rad_norm = self.__norm(rad)
+        teff_norm = self.__norm(teff)
+
+        stack = np.column_stack([rad_norm, teff_norm])
+
+        cllab = rsclean.fit_predict(stack)
+
+        mask = list(map(lambda c: c != -1, cllab))
+
+        new_df = df[mask]
 
         return new_df
